@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Egg Sorting Dashboard - Clean Firebase Structure
+FIXED: Now returns quality data correctly
 """
 
 from flask import Flask, jsonify, request, render_template
@@ -25,7 +26,7 @@ ref_sizes = db.reference("sizes")
 ref_records = db.reference("records")
 
 VALID_SIZES = {"small", "medium", "large", "xlarge"}
-VALID_COLORS = {"white", "brown"}
+VALID_COLORS = {"white", "brown", "other"}
 VALID_QUALITY = {"good", "bad"}
 
 
@@ -61,6 +62,11 @@ def get_stats():
             "medium": int(sizes.get("medium", 0)),
             "large": int(sizes.get("large", 0)),
             "xlarge": int(sizes.get("xlarge", 0)),
+        },
+        # FIXED: Added quality object that your app.js expects
+        "quality": {
+            "good": int(counters.get("good", 0)),
+            "bad": int(counters.get("bad", 0)),
         },
         "recent": recent
     }
@@ -149,4 +155,11 @@ def api_reset():
 
 
 if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("EGG SORTING DASHBOARD")
+    print("="*60)
+    print("Access at: http://localhost:5000")
+    print("Auto-refresh: Every 5 seconds")
+    print("="*60 + "\n")
+    
     app.run(host="0.0.0.0", port=5000, debug=True)
