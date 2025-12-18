@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Egg Sorting Machine Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Egg Sorting Machine – Dashboard</h1>
+    <p class="subtitle">Real-time overview of sorted eggs</p>
+  </header>
+
+  <main class="container">
+    <!-- Stats cards -->
+    <section class="cards">
+      <div class="card">
+        <h2>Total Eggs</h2>
+        <p id="total-eggs" class="big-number">0</p>
+      </div>
+
+      <div class="card">
+        <h2>By Size</h2>
+        <ul id="size-list">
+          <li>Small: <span data-size="small">0</span></li>
+          <li>Medium: <span data-size="medium">0</span></li>
+          <li>Large: <span data-size="large">0</span></li>
+          <li>XLarge: <span data-size="xlarge">0</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>By Quality</h2>
+        <ul id="quality-list">
+          <li>Good: <span data-quality="good">0</span></li>
+          <li>Bad: <span data-quality="bad">0</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Recent table -->
+    <section class="table-section">
+      <div class="table-header">
+        <h2>Recent Eggs</h2>
+        <button id="refresh-btn">Refresh</button>
+        <button id="reset-btn" class="danger">Reset Data</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Size</th>
+            <th>Color</th>
+            <th>Quality</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="recent-table-body">
+          <!-- Filled by JS -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Manual add form (for testing) -->
+    <section class="form-section">
+      <h2>Manually Add Egg (for testing)</h2>
+      <form id="add-egg-form">
+        <label>
+          Size
+          <select name="size">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+            <option value="xlarge">XLarge</option>
+          </select>
+        </label>
+
+        <label>
+          Color
+          <select name="color">
+            <option value="white">White</option>
+            <option value="brown">Brown</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+
+        <label>
+          Quality
+          <select name="quality">
+            <option value="good">Good</option>
+            <option value="bad">Bad</option>
+          </select>
+        </label>
+
+        <button type="submit">Add Egg</button>
+        <span id="form-status"></span>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Egg Sorting Machine &middot; BS CpE Project</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
