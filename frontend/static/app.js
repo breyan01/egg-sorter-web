@@ -20,7 +20,7 @@ function updateDashboard(data) {
     span.textContent = data.sizes[key] ?? 0;
   });
 
-  // Quality
+  // Quality (FIXED: now uses data.quality object)
   const qualitySpans = document.querySelectorAll(
     "#quality-list span[data-quality]"
   );
@@ -33,10 +33,17 @@ function updateDashboard(data) {
   const tbody = document.getElementById("recent-table-body");
   tbody.innerHTML = "";
 
+  if ((data.recent || []).length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td colspan="5" style="text-align: center;">No eggs sorted yet</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+
   (data.recent || []).forEach((egg) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${egg.id}</td>
+      <td>${egg.id.substring(0, 8)}</td>
       <td>${egg.size}</td>
       <td>${egg.color}</td>
       <td>${egg.quality}</td>
@@ -78,33 +85,45 @@ async function addEgg(event) {
       throw new Error(err.error || "Failed to add egg");
     }
 
-    status.textContent = "Egg added!";
-    status.classList.add("ok");
+    status.textContent = "✓ Egg added!";
+    status.style.color = "#10b981";
+    form.reset();
     await fetchStats();
+    
+    // Clear status after 2 seconds
+    setTimeout(() => {
+      status.textContent = "";
+    }, 2000);
   } catch (err) {
     console.error(err);
-    status.textContent = err.message;
-    status.classList.add("error");
+    status.textContent = "✗ " + err.message;
+    status.style.color = "#ef4444";
   }
 }
 
 async function resetData() {
-  if (!confirm("Reset all egg data?")) return;
+  if (!confirm("Reset all egg data? This cannot be undone!")) return;
   try {
     const res = await fetch("/api/reset", { method: "POST" });
     if (!res.ok) throw new Error("Failed to reset");
+    alert("✓ All data has been reset");
     await fetchStats();
   } catch (err) {
     console.error(err);
-    alert("Error resetting data: " + err.message);
+    alert("✗ Error resetting data: " + err.message);
   }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("🥚 Egg Sorting Dashboard - Auto-refresh every 2 seconds");
+  
   fetchStats();
 
   // Refresh button
-  document.getElementById("refresh-btn").addEventListener("click", fetchStats);
+  document.getElementById("refresh-btn").addEventListener("click", () => {
+    fetchStats();
+    console.log("Manual refresh at " + new Date().toLocaleTimeString());
+  });
 
   // Reset button
   document.getElementById("reset-btn").addEventListener("click", resetData);
@@ -114,6 +133,6 @@ document.addEventListener("DOMContentLoaded", () => {
     .getElementById("add-egg-form")
     .addEventListener("submit", addEgg);
 
-  // Optional: auto-refresh every 5 seconds
-  setInterval(fetchStats, 5000);
+  // CHANGED: Auto-refresh every 2 seconds (was 5)
+  setInterval(fetchStats, 2000);
 });
