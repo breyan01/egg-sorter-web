@@ -4,10 +4,9 @@ Egg Sorter Dashboard (RECORD-BASED)
 Reads Firebase records and computes counts safely
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import firebase_admin
 from firebase_admin import credentials, db
-from collections import defaultdict
 from datetime import datetime
 
 # ==============================
@@ -49,7 +48,7 @@ def compute_dashboard_data():
 
     recent = []
 
-    for key, r in records.items():
+    for r in records.values():
         counters["total"] += 1
 
         # Quality
@@ -68,7 +67,6 @@ def compute_dashboard_data():
         if size in sizes:
             sizes[size] += 1
 
-        # Recent records (last 10)
         recent.append({
             "time": r.get("timestamp"),
             "size": r.get("size"),
@@ -77,7 +75,6 @@ def compute_dashboard_data():
             "confidence": r.get("confidence")
         })
 
-    # Sort recent by timestamp (newest first)
     recent.sort(key=lambda x: x["time"] or "", reverse=True)
     recent = recent[:10]
 
@@ -89,13 +86,7 @@ def compute_dashboard_data():
 # ==============================
 @app.route("/")
 def dashboard():
-    counters, sizes, recent = compute_dashboard_data()
-    return render_template(
-        "dashboard.html",
-        counters=counters,
-        sizes=sizes,
-        recent=recent
-    )
+    return render_template("dashboard.html")
 
 
 @app.route("/api/data")
@@ -108,8 +99,16 @@ def api_data():
     })
 
 
+@app.route("/api/reset", methods=["POST"])
+def api_reset():
+    """Clear all egg records"""
+    records_ref.delete()
+    return jsonify({"status": "ok", "message": "All records cleared"})
+
+
 # ==============================
 # Run App
 # ==============================
 if __name__ == "__main__":
+    print("\nDashboard running at http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)
