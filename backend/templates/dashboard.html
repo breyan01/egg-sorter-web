@@ -13,6 +13,7 @@ body { font-family: Arial; background:#f5f7fa; text-align:center; }
 .red { background:#e74c3c; color:white; }
 .green { background:#2ecc71; color:white; }
 .manual { display:flex; justify-content:center; gap:8px; margin-top:20px; }
+.manual input, .manual select { padding:8px; border-radius:4px; border:1px solid #ddd; }
 </style>
 </head>
 
@@ -30,49 +31,103 @@ body { font-family: Arial; background:#f5f7fa; text-align:center; }
 
 <h2 style="text-align:center;">Manual Add</h2>
 <div class="manual">
-    <input id="qty" type="number" min="1" max="5" value="1">
-    <select id="size"><option>small</option><option>medium</option><option>large</option><option>xlarge</option></select>
-    <select id="color"><option>white</option><option>brown</option></select>
-    <select id="quality"><option>good</option><option>bad</option></select>
-    <button class="green" onclick="manualAdd()">Add</button>
+    <input id="qty" type="number" min="1" max="5" value="1" placeholder="Qty (max 5)">
+    <select id="size">
+        <option value="small">Small</option>
+        <option value="medium">Medium</option>
+        <option value="large">Large</option>
+        <option value="xlarge">XLarge</option>
+    </select>
+    <select id="color">
+        <option value="white">White</option>
+        <option value="brown">Brown</option>
+    </select>
+    <select id="quality">
+        <option value="good">Good</option>
+        <option value="bad">Bad</option>
+    </select>
+    <button class="green" onclick="manualAdd()">Add Eggs</button>
 </div>
 
 <script>
 async function refreshData() {
-    const r = await fetch("/api/data");
-    const d = await r.json();
-    const box = document.getElementById("stats");
-    box.innerHTML = "";
+    try {
+        const r = await fetch("/api/data");
+        const d = await r.json();
+        const box = document.getElementById("stats");
+        box.innerHTML = "";
 
-    Object.entries(d.counters).forEach(([k,v]) => {
-        box.innerHTML += `<div class="card"><h3>${k}</h3><p>${v}</p></div>`;
-    });
-    Object.entries(d.sizes).forEach(([k,v]) => {
-        box.innerHTML += `<div class="card"><h3>${k}</h3><p>${v}</p></div>`;
-    });
+        // Display counters
+        Object.entries(d.counters).forEach(([k,v]) => {
+            box.innerHTML += `<div class="card"><h3>${k.toUpperCase()}</h3><p style="font-size:2em;font-weight:bold;">${v}</p></div>`;
+        });
+        
+        // Display sizes
+        Object.entries(d.sizes).forEach(([k,v]) => {
+            box.innerHTML += `<div class="card"><h3>${k.toUpperCase()}</h3><p style="font-size:2em;font-weight:bold;">${v}</p></div>`;
+        });
+    } catch (error) {
+        console.error("Error fetching data:", error);
+    }
 }
 
 async function manualAdd() {
-    const qty = +qtyInput.value;
-    if (qty < 1 || qty > 5) return alert("Max manual add is 5 eggs");
+    // Get values from form
+    const qty = +document.getElementById("qty").value;
+    const size = document.getElementById("size").value;
+    const color = document.getElementById("color").value;
+    const quality = document.getElementById("quality").value;
+    
+    // Validate quantity
+    if (qty < 1 || qty > 5) {
+        alert("Please enter a quantity between 1 and 5");
+        return;
+    }
 
-    await fetch("/api/manual-add", {
-        method:"POST",
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-            qty, size:size.value, color:color.value, quality:quality.value
-        })
-    });
+    try {
+        const response = await fetch("/api/manual-add", {
+            method: "POST",
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                qty: qty,
+                size: size,
+                color: color,
+                quality: quality
+            })
+        });
 
-    refreshData();
+        if (response.ok) {
+            alert(`✓ Successfully added ${qty} ${size} ${color} ${quality} egg(s)!`);
+            refreshData();
+        } else {
+            const error = await response.json();
+            alert("Error: " + (error.error || "Failed to add eggs"));
+        }
+    } catch (error) {
+        console.error("Error adding eggs:", error);
+        alert("Network error. Please try again.");
+    }
 }
 
 async function resetDashboard() {
-    await fetch("/api/reset", {method:"POST"});
-    refreshData();
+    if (!confirm("Reset dashboard display? (Records will remain in database)")) {
+        return;
+    }
+    
+    try {
+        await fetch("/api/reset", {method: "POST"});
+        alert("✓ Dashboard reset!");
+        refreshData();
+    } catch (error) {
+        console.error("Error resetting:", error);
+        alert("Failed to reset dashboard");
+    }
 }
 
+// Initial load
 refreshData();
+
+// Auto-refresh every 2 seconds
 setInterval(refreshData, 2000);
 </script>
 
