@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
 """
-Egg Sorter Dashboard (PURE RECORD-BASED)
-- Correct PH timezone handling
-- PDF reports with totals
+Egg Sorter Dashboard (RECORD-BASED)
+Dashboard-only reset, Manual Add (max 5),
+Daily & Weekly PDF Reports (PH Timezone)
 """
 
 from flask import Flask, render_template, jsonify, request, send_file
 import firebase_admin
 from firebase_admin import credentials, db
-from datetime import datetime, timezone, timedelta
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
+from datetime import datetime, timedelta, timezone
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 import io
-import time
-
-# ==============================
-# Timezone (Philippines UTC+8)
-# ==============================
-PH_TZ = timezone(timedelta(hours=8))
 
 # ==============================
 # Flask App
@@ -36,24 +30,22 @@ firebase_admin.initialize_app(cred, {
 
 records_ref = db.reference("records")
 
+PH_TZ = timezone(timedelta(hours=8))
+
 # ==============================
-# Dashboard Stats
+# Helper: Compute Stats
 # ==============================
 def compute_dashboard_data():
     records = records_ref.get() or {}
 
-    counters = {"total": 0, "good": 0, "bad": 0, "brown": 0, "white": 0}
-    sizes = {"small": 0, "medium": 0, "large": 0, "xlarge": 0}
+    counters = dict(total=0, good=0, bad=0, brown=0, white=0)
+    sizes = dict(small=0, medium=0, large=0, xlarge=0)
 
     for r in records.values():
         counters["total"] += 1
-        counters["good" if r.get("quality") == "good" else "bad"] += 1
-
-        if r.get("color") in counters:
-            counters[r["color"]] += 1
-
-        if r.get("size") in sizes:
-            sizes[r["size"]] += 1
+        counters[r["quality"]] += 1
+        counters[r["color"]] += 1
+        sizes[r["size"]] += 1
 
     return counters, sizes
 
@@ -63,72 +55,38 @@ def compute_dashboard_data():
 def generate_pdf(title, start_time):
     records = records_ref.get() or {}
 
-    styles = getSampleStyleSheet()
+    filtered = []
+    for r in records.values():
+        rt = datetime.fromisoformat(r["timestamp"])
+        if rt >= start_time:
+            filtered.append(r)
+
+    total_count = len(filtered)
+
+    summary = {}
+    for r in filtered:
+        key = (r["size"], r["color"], r["quality"])
+        summary[key] = summary.get(key, 0) + 1
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
 
-    elements = [Paragraph(title, styles["Title"]), Spacer(1, 12)]
+    elements = [
+        Paragraph(f"<b>{title}</b>", styles["Title"]),
+        Paragraph(f"Generated: {datetime.now(PH_TZ).strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]),
+        Paragraph(f"<b>Total Eggs: {total_count}</b>", styles["Heading2"]),
+    ]
 
-    # Totals for this report
-    totals = {
-        "total": 0,
-        "good": 0,
-        "bad": 0,
-        "white": 0,
-        "brown": 0,
-        "small": 0,
-        "medium": 0,
-        "large": 0,
-        "xlarge": 0
-    }
+    table_data = [["Size", "Color", "Quality", "Count"]]
+    for (size, color, quality), count in summary.items():
+        table_data.append([size, color, quality, count])
 
-    table_data = [["Time (PH)", "Size", "Color", "Quality", "Confidence", "Source"]]
-
-    for r in records.values():
-        record_time = datetime.fromisoformat(r["timestamp"])
-        if record_time.tzinfo is None:
-            record_time = record_time.replace(tzinfo=timezone.utc)
-
-        # Convert to PH time
-        record_time_ph = record_time.astimezone(PH_TZ)
-
-        if record_time < start_time:
-            continue
-
-        totals["total"] += 1
-        totals[r["quality"]] += 1
-        totals[r["color"]] += 1
-        totals[r["size"]] += 1
-
-        table_data.append([
-            record_time_ph.strftime("%Y-%m-%d %H:%M:%S"),
-            r["size"],
-            r["color"],
-            r["quality"],
-            f'{round(r["confidence"] * 100, 1)}%',
-            r.get("source", "auto")
-        ])
-
-    # Summary section
-    summary = f"""
-    <b>Total Eggs:</b> {totals["total"]}<br/>
-    <b>Good:</b> {totals["good"]} | <b>Bad:</b> {totals["bad"]}<br/>
-    <b>White:</b> {totals["white"]} | <b>Brown:</b> {totals["brown"]}<br/>
-    <b>Small:</b> {totals["small"]},
-    <b>Medium:</b> {totals["medium"]},
-    <b>Large:</b> {totals["large"]},
-    <b>XLarge:</b> {totals["xlarge"]}
-    """
-
-    elements.append(Paragraph(summary, styles["Normal"]))
-    elements.append(Spacer(1, 16))
-
-    table = Table(table_data, repeatRows=1)
+    table = Table(table_data)
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER")
+        ("BACKGROUND", (0,0), (-1,0), colors.grey),
+        ("GRID", (0,0), (-1,-1), 1, colors.black),
+        ("ALIGN", (0,0), (-1,-1), "CENTER")
     ]))
 
     elements.append(table)
@@ -148,45 +106,43 @@ def api_data():
     counters, sizes = compute_dashboard_data()
     return jsonify({"counters": counters, "sizes": sizes})
 
-@app.route("/api/manual_add", methods=["POST"])
+@app.route("/api/manual-add", methods=["POST"])
 def manual_add():
     data = request.json
     qty = int(data["qty"])
-    now = datetime.now(timezone.utc).isoformat()
 
-    for i in range(qty):
-        record_id = f"manual_{int(time.time()*1000)}_{i}"
-        records_ref.child(record_id).set({
+    if qty < 1 or qty > 5:
+        return jsonify({"error": "Max manual add is 5 eggs"}), 400
+
+    for _ in range(qty):
+        records_ref.push({
             "size": data["size"],
             "color": data["color"],
             "quality": data["quality"],
             "confidence": 1.0,
-            "source": "manual",
-            "timestamp": now
+            "timestamp": datetime.now(PH_TZ).isoformat()
         })
 
     return jsonify({"status": "ok"})
 
-@app.route("/pdf/daily")
-def daily_pdf():
-    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    return send_file(
-        generate_pdf("Daily Egg Report", start),
-        as_attachment=True,
-        download_name="daily_report.pdf"
-    )
+@app.route("/api/reset", methods=["POST"])
+def reset_dashboard():
+    return jsonify({"status": "ok"})
 
-@app.route("/pdf/weekly")
-def weekly_pdf():
-    start = datetime.now(timezone.utc) - timedelta(days=7)
-    return send_file(
-        generate_pdf("Weekly Egg Report", start),
-        as_attachment=True,
-        download_name="weekly_report.pdf"
-    )
+@app.route("/report/daily")
+def daily_report():
+    start = datetime.now(PH_TZ).replace(hour=0, minute=0, second=0)
+    pdf = generate_pdf("Daily Egg Report", start)
+    return send_file(pdf, as_attachment=True, download_name="daily_report.pdf")
+
+@app.route("/report/weekly")
+def weekly_report():
+    start = datetime.now(PH_TZ) - timedelta(days=7)
+    pdf = generate_pdf("Weekly Egg Report", start)
+    return send_file(pdf, as_attachment=True, download_name="weekly_report.pdf")
 
 # ==============================
-# Run
+# Run App
 # ==============================
 if __name__ == "__main__":
     print("Dashboard running at http://localhost:5000")
